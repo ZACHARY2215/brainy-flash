@@ -86,12 +86,11 @@ const About = () => {
             </div>
             <p className="text-lg max-w-2xl mx-auto mb-6">
               Zachary is a passionate developer who believes in the power of technology to enhance education. 
-              Zoomies was created to solve the common problems students face when studying with traditional 
-              flashcards - lack of interactivity, poor organization, and limited study modes.
+              Zoomies was created so that his girlfriend can have a better way to study instead of paying for expensive flashcard apps.
             </p>
             <div className="bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg p-4 mb-6">
               <p className="text-center text-pink-700 font-medium">
-                💕 This website is created with love for his special girlfriend 💕
+                💕 This website is created with love for his girlfriend 💕
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">

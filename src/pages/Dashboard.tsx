@@ -48,6 +48,7 @@ const Dashboard = () => {
   const [sets, setSets] = useState<FlashcardSet[]>([]);
   const [favorites, setFavorites] = useState<FlashcardSet[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [publicSets, setPublicSets] = useState<FlashcardSet[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [favoriteSetIds, setFavoriteSetIds] = useState<Set<string>>(new Set());
@@ -72,6 +73,17 @@ const Dashboard = () => {
         .order("created_at", { ascending: false });
 
       if (setsError) throw setsError;
+
+      // Fetch public sets (excluding user's own to avoid duplication)
+      const { data: publicData, error: publicError } = await supabase
+        .from("sets")
+        .select(`*, flashcards(count)`)
+        .eq("is_public", true)
+        .neq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+        .limit(24);
+
+      if (publicError) throw publicError;
 
       // Fetch user's favorites
       const { data: favoritesData, error: favoritesError } = await supabase
@@ -98,21 +110,56 @@ const Dashboard = () => {
       }));
 
       setSets(transformedSets);
+      const transformedPublic = (publicData || []).map(set => ({
+        id: set.id,
+        title: set.title,
+        description: set.description || "",
+        tags: set.tags || [],
+        flashcard_count: set.flashcards?.[0]?.count || 0,
+        study_sessions_count: 0,
+        is_favorited: false,
+        created_at: set.created_at,
+        updated_at: set.updated_at
+      }));
+      setPublicSets(transformedPublic);
 
       // Filter favorites
       const favoriteSets = transformedSets.filter(set => set.is_favorited);
       setFavorites(favoriteSets);
 
-      // For now, use mock stats based on the data we have
+      // Derive stats and compute per-user accuracy from study_sessions
       const totalFlashcards = transformedSets.reduce((sum, set) => sum + set.flashcard_count, 0);
-      const mockStats: UserStats = {
+
+      // Fetch user's study sessions for accuracy/time aggregation
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from("study_sessions")
+        .select("cards_studied, correct_answers, total_time_seconds")
+        .eq("user_id", user?.id);
+
+      if (sessionsError) throw sessionsError;
+
+      const aggregated = (sessionsData || []).reduce(
+        (acc, s) => {
+          acc.totalCardsStudied += s.cards_studied || 0;
+          acc.totalCorrect += s.correct_answers || 0;
+          acc.totalTime += s.total_time_seconds || 0;
+          return acc;
+        },
+        { totalCardsStudied: 0, totalCorrect: 0, totalTime: 0 }
+      );
+
+      const accuracy = aggregated.totalCardsStudied > 0
+        ? Math.round((aggregated.totalCorrect / aggregated.totalCardsStudied) * 100)
+        : 0;
+
+      const computedStats: UserStats = {
         total_sets: transformedSets.length,
         total_flashcards: totalFlashcards,
         total_sessions: transformedSets.reduce((sum, set) => sum + set.study_sessions_count, 0),
-        total_time_minutes: 0, // TODO: Implement actual study time tracking
-        accuracy_percentage: 85 // TODO: Implement actual accuracy calculation
+        total_time_minutes: Math.round(aggregated.totalTime / 60),
+        accuracy_percentage: accuracy,
       };
-      setStats(mockStats);
+      setStats(computedStats);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -322,6 +369,7 @@ const Dashboard = () => {
             <TabsTrigger value="all">All Sets ({sets.length})</TabsTrigger>
             <TabsTrigger value="favorites">Favorites ({favorites.length})</TabsTrigger>
             <TabsTrigger value="recent">Recent</TabsTrigger>
+            <TabsTrigger value="public">Public</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="space-y-4">
@@ -568,6 +616,64 @@ const Dashboard = () => {
                 <p className="text-muted-foreground">
                   Create your first set to see it here
                 </p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="public" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {publicSets.map((set) => (
+                <Card key={set.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{set.title}</CardTitle>
+                        <CardDescription className="mt-2">
+                          {set.description || "No description"}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="secondary">
+                          {set.flashcard_count} cards
+                        </Badge>
+                        <Badge variant="outline">
+                          Public
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs text-muted-foreground">
+                        Updated {new Date(set.updated_at).toLocaleDateString()}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Link to={`/set/${set.id}`}>
+                          <Button size="sm" variant="outline">
+                            <Play className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                        </Link>
+                        <Link to={`/study/${set.id}`}>
+                          <Button size="sm">
+                            Study
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {publicSets.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No public sets yet</h3>
+                <p className="text-muted-foreground">Public sets from the community will appear here</p>
               </div>
             )}
           </TabsContent>

@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import CreateSet from "./pages/CreateSet";
 import EditSet from "./pages/EditSet";
 import StudySet from "./pages/StudySet";
+import SetDetails from "./pages/SetDetails";
 import TestSet from "./pages/TestSet";
 import Profile from "./pages/Profile";
 import AuthPage from "./pages/AuthPage";
@@ -81,7 +82,7 @@ const App = () => (
               } />
               
               {/* Public Routes */}
-              <Route path="/set/:setId" element={<StudySet />} />
+              <Route path="/set/:setId" element={<SetDetails />} />
               
               {/* Catch-all route */}
               <Route path="*" element={<NotFound />} />

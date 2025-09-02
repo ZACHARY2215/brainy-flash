@@ -53,6 +53,7 @@ const TestSet = () => {
   const [matchingPairs, setMatchingPairs] = useState<{definition: string, term: string, matched: boolean}[]>([]);
   const [availableTerms, setAvailableTerms] = useState<string[]>([]);
   const [draggedTerm, setDraggedTerm] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!setId) return;
@@ -94,6 +95,18 @@ const TestSet = () => {
         }));
         setMatchingPairs(matchingData);
         setAvailableTerms(shuffled.map(card => card.term).sort(() => Math.random() - 0.5));
+
+        // Start a study session for this test
+        if (user?.id) {
+          const { data: newSession, error: sessionError } = await supabase
+            .from('study_sessions')
+            .insert({ user_id: user.id, set_id: setId, mode: 'test' })
+            .select('id')
+            .single();
+          if (!sessionError && newSession?.id) {
+            setSessionId(newSession.id);
+          }
+        }
       } catch (error) {
         console.error("Error fetching set:", error);
         toast.error("Failed to load flashcard set");
@@ -156,6 +169,21 @@ const TestSet = () => {
     setDraggedTerm(null);
   };
 
+  // Mobile tap support for matching
+  const handleTermTap = (term: string) => {
+    setDraggedTerm(term);
+  };
+  const handleDefinitionTap = (definition: string) => {
+    if (!draggedTerm) return;
+    setMatchingPairs(prev => prev.map(pair => 
+      pair.definition === definition 
+        ? { ...pair, term: draggedTerm, matched: true }
+        : pair
+    ));
+    setAvailableTerms(prev => prev.filter(term => term !== draggedTerm));
+    setDraggedTerm(null);
+  };
+
   const removeMatch = (definition: string) => {
     const pair = matchingPairs.find(p => p.definition === definition);
     if (pair && pair.matched) {
@@ -171,7 +199,7 @@ const TestSet = () => {
     }
   };
 
-  const handleSubmitAnswer = () => {
+  const handleSubmitAnswer = async () => {
     if (testType === 'matching') {
       // For matching test, check all pairs
       const allMatched = matchingPairs.every(pair => pair.matched);
@@ -193,6 +221,23 @@ const TestSet = () => {
 
       setTestResults([...testResults, ...results]);
       setIsCompleted(true);
+      // Update session with final results
+      if (sessionId && user?.id) {
+        const totalCards = results.length;
+        const correct = results.filter(r => r.isCorrect).length;
+        const { error: updateErr } = await supabase
+          .from('study_sessions')
+          .update({
+            cards_studied: totalCards,
+            correct_answers: correct,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', sessionId)
+          .eq('user_id', user.id);
+        if (updateErr) {
+          console.error('Failed to update study session', updateErr);
+        }
+      }
       return;
     }
 
@@ -220,6 +265,23 @@ const TestSet = () => {
 
     setTestResults([...testResults, questionResult]);
     setShowAnswer(true);
+    // If last question, update session summary
+    if (currentQuestionIndex === shuffledFlashcards.length - 1 && sessionId && user?.id) {
+      const totalCards = testResults.length + 1; // including current
+      const correct = testResults.filter(q => q.isCorrect).length + (isCorrect ? 1 : 0);
+      const { error: updateErr } = await supabase
+        .from('study_sessions')
+        .update({
+          cards_studied: totalCards,
+          correct_answers: correct,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId)
+        .eq('user_id', user.id);
+      if (updateErr) {
+        console.error('Failed to update study session', updateErr);
+      }
+    }
   };
 
   const nextQuestion = () => {
@@ -516,6 +578,7 @@ const TestSet = () => {
                               }`}
                               onDragOver={handleDragOver}
                               onDrop={(e) => handleDrop(e, pair.definition)}
+                              onClick={() => handleDefinitionTap(pair.definition)}
                             >
                               {pair.matched ? (
                                 <div className="flex items-center justify-between w-full">
@@ -548,6 +611,7 @@ const TestSet = () => {
                                 key={index}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, term)}
+                                onClick={() => handleTermTap(term)}
                                 className="p-3 bg-primary/10 border border-primary/20 rounded-lg cursor-move hover:bg-primary/20 transition-colors flex items-center gap-2"
                               >
                                 <GripVertical className="h-4 w-4 text-primary" />

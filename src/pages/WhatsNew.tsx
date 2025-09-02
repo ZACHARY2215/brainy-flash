@@ -9,6 +9,60 @@ const WhatsNew = () => {
 
   const recentUpdates = [
     {
+      icon: Zap,
+      title: "Public Set Details Page",
+      description: "View a set's full list of terms and definitions publicly, with quick actions to study with flashcards or take a test.",
+      date: "Latest",
+      color: "text-green-700",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200"
+    },
+    {
+      icon: Target,
+      title: "Public Sets in Dashboard",
+      description: "New Dashboard tab showcasing public community sets. Quickly preview, view, and study them.",
+      date: "Latest",
+      color: "text-teal-700",
+      bgColor: "bg-teal-50",
+      borderColor: "border-teal-200"
+    },
+    {
+      icon: BarChart3,
+      title: "Per-Account Accuracy",
+      description: "Accuracy is now tracked per user using study sessions for more meaningful stats.",
+      date: "Latest",
+      color: "text-indigo-700",
+      bgColor: "bg-indigo-50",
+      borderColor: "border-indigo-200"
+    },
+    {
+      icon: Smartphone,
+      title: "Mobile Matching Support",
+      description: "Matching test now supports tap-to-match on iOS and Android (drag & drop still works on desktop).",
+      date: "Latest",
+      color: "text-blue-700",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200"
+    },
+    {
+      icon: CheckCircle,
+      title: "Profile on Mobile Navbar",
+      description: "Profile and Sign Out are now visible and accessible in the mobile menu.",
+      date: "Latest",
+      color: "text-emerald-700",
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200"
+    },
+    {
+      icon: Zap,
+      title: "Vercel SPA Refresh Fix + New Link Thumbnail",
+      description: "Fixed 404 on refresh via SPA rewrite and updated Open Graph/Twitter image. Place your image at public/og-image.png.",
+      date: "Latest",
+      color: "text-fuchsia-700",
+      bgColor: "bg-fuchsia-50",
+      borderColor: "border-fuchsia-200"
+    },
+    {
       icon: GripVertical,
       title: "Drag & Drop Matching Test",
       description: "New interactive matching test mode with intuitive drag and drop functionality",

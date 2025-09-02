@@ -130,9 +130,18 @@ export const Navbar = () => {
           <div className="md:hidden py-4 border-t border-border">
             <div className="flex flex-col space-y-4">
               {user && (
-                <Link to="/dashboard" className="text-foreground hover:text-primary transition-smooth">
-                  Dashboard
-                </Link>
+                <>
+                  <Link to="/dashboard" className="text-foreground hover:text-primary transition-smooth">
+                    Dashboard
+                  </Link>
+                  <Link to="/profile" className="text-foreground hover:text-primary transition-smooth">
+                    Profile
+                  </Link>
+                  <button onClick={handleSignOut} className="text-left text-foreground hover:text-primary transition-smooth">
+                    Sign Out
+                  </button>
+                  <div className="border-t border-border" />
+                </>
               )}
               <Link to="/whats-new" className="text-foreground hover:text-primary transition-smooth">
                 What's New?
