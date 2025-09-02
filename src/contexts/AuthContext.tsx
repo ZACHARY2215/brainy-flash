@@ -64,7 +64,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signUp = async (email: string, password: string, username: string) => {
-    const siteUrl = (import.meta as any).env?.VITE_SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -73,7 +72,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           username,
           full_name: username,
         },
-        emailRedirectTo: `${siteUrl}/auth`,
       },
     });
     return { error };
@@ -84,11 +82,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signInWithGoogle = async () => {
-    const siteUrl = (import.meta as any).env?.VITE_SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${siteUrl}/dashboard`,
+        redirectTo: `${window.location.origin}/dashboard`,
       },
     });
     return { error };
