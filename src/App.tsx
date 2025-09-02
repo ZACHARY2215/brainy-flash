@@ -14,6 +14,7 @@ import CreateSet from "./pages/CreateSet";
 import EditSet from "./pages/EditSet";
 import StudySet from "./pages/StudySet";
 import Profile from "./pages/Profile";
+import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<AuthPage />} />
               
               {/* Protected Routes */}
               <Route path="/dashboard" element={

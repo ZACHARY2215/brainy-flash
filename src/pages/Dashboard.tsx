@@ -315,7 +315,7 @@ const Dashboard = () => {
 
                     <div className="flex justify-between items-center">
                       <div className="text-xs text-muted-foreground">
-                        Favorited {new Date(set.favorited_at).toLocaleDateString()}
+                        Favorited {new Date(set.created_at).toLocaleDateString()}
                       </div>
                       <div className="flex space-x-2">
                         <Link to={`/study/${set.id}`}>
