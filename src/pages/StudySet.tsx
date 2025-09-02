@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, RotateCcw, ChevronLeft, ChevronRight, CheckCircle, Target } from "lucide-react";
+
 
 interface Flashcard {
   id: string;
@@ -31,6 +32,7 @@ const StudySet = () => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [studiedCards, setStudiedCards] = useState<number[]>([]);
+  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     if (!setId) return;
@@ -79,6 +81,12 @@ const StudySet = () => {
     if (currentCardIndex < flashcardSet.flashcards.length - 1) {
       setCurrentCardIndex(currentCardIndex + 1);
       setIsFlipped(false);
+    } else {
+      // This is the last card, mark as completed
+      if (!studiedCards.includes(currentCardIndex)) {
+        setStudiedCards([...studiedCards, currentCardIndex]);
+      }
+      setIsCompleted(true);
     }
   };
 
@@ -93,33 +101,108 @@ const StudySet = () => {
     setCurrentCardIndex(0);
     setIsFlipped(false);
     setStudiedCards([]);
+    setIsCompleted(false);
   };
 
-  const progress = flashcardSet ? (studiedCards.length / flashcardSet.flashcards.length) * 100 : 0;
+  const handleFinish = () => {
+    if (!studiedCards.includes(currentCardIndex)) {
+      setStudiedCards([...studiedCards, currentCardIndex]);
+    }
+    setIsCompleted(true);
+  };
+
+  const progress = flashcardSet ? ((currentCardIndex + 1) / flashcardSet.flashcards.length) * 100 : 0;
+  const isLastCard = flashcardSet ? currentCardIndex === flashcardSet.flashcards.length - 1 : false;
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">Loading...</div>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">Loading...</div>
+        </div>
       </div>
     );
   }
 
   if (!flashcardSet || flashcardSet.flashcards.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">No flashcards found</h2>
-          <p className="text-muted-foreground mb-4">This set doesn't have any flashcards yet.</p>
-          <Button onClick={() => navigate("/dashboard")}>
-            Back to Dashboard
-          </Button>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">No flashcards found</h2>
+            <p className="text-muted-foreground mb-4">This set doesn't have any flashcards yet.</p>
+            <Button onClick={() => navigate("/dashboard")}>
+              Back to Dashboard
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   const currentCard = flashcardSet.flashcards[currentCardIndex];
+
+  // Show completion screen
+  if (isCompleted) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="mb-6">
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/dashboard")}
+                className="mb-4"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </div>
+
+            <Card className="p-8">
+              <CardContent className="space-y-6">
+                <div className="flex justify-center">
+                  <CheckCircle className="h-16 w-16 text-green-500" />
+                </div>
+                
+                <div>
+                  <h1 className="text-3xl font-bold mb-2">🎉 Congratulations!</h1>
+                  <p className="text-muted-foreground mb-6">
+                    You've completed "{flashcardSet.title}"!
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-primary">{studiedCards.length}</div>
+                      <div className="text-sm text-muted-foreground">Cards Studied</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-primary">{Math.round(progress)}%</div>
+                      <div className="text-sm text-muted-foreground">Completion</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button onClick={resetStudy} variant="outline">
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Study Again
+                  </Button>
+                  <Button onClick={() => navigate(`/test/${setId}`)}>
+                    <Target className="h-4 w-4 mr-2" />
+                    Test Yourself
+                  </Button>
+                  <Button onClick={() => navigate("/dashboard")}>
+                    Back to Dashboard
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -144,7 +227,7 @@ const StudySet = () => {
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium">
-                Progress: {studiedCards.length} / {flashcardSet.flashcards.length}
+                Progress: {currentCardIndex + 1} / {flashcardSet.flashcards.length}
               </span>
               <span className="text-sm text-muted-foreground">
                 Card {currentCardIndex + 1} of {flashcardSet.flashcards.length}
@@ -203,24 +286,21 @@ const StudySet = () => {
               </Button>
             </div>
 
-            <Button
-              onClick={nextCard}
-              disabled={currentCardIndex === flashcardSet.flashcards.length - 1}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
+            {isLastCard ? (
+              <Button onClick={handleFinish} disabled={!isFlipped}>
+                Finish
+                <CheckCircle className="h-4 w-4 ml-2" />
+              </Button>
+            ) : (
+              <Button
+                onClick={nextCard}
+                disabled={!isFlipped}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
           </div>
-
-          {currentCardIndex === flashcardSet.flashcards.length - 1 && isFlipped && (
-            <div className="text-center mt-8">
-              <h3 className="text-xl font-semibold mb-2">🎉 Congratulations!</h3>
-              <p className="text-muted-foreground mb-4">
-                You've completed this flashcard set!
-              </p>
-              <Button onClick={resetStudy}>Study Again</Button>
-            </div>
-          )}
         </div>
       </div>
     </div>

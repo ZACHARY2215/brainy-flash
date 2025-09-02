@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
-import { Brain, BookOpen, Zap, Users } from "lucide-react";
+import { Cat, BookOpen, Zap, Users } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -20,9 +20,11 @@ const Index = () => {
       <header className="container mx-auto px-4 py-6">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <Brain className="h-8 w-8 text-blue-600" />
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center">
+              <Cat className="h-5 w-5 text-white" />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              FlashGenius
+              Zoomies
             </h1>
           </div>
           <Button onClick={() => navigate("/auth")}>
@@ -67,7 +69,7 @@ const Index = () => {
         {/* Features */}
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="text-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-            <Brain className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+            <Cat className="h-12 w-12 text-purple-600 mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">AI-Powered Generation</h3>
             <p className="text-gray-600 dark:text-gray-300">
               Paste your notes and let AI automatically create flashcards for you
@@ -94,7 +96,7 @@ const Index = () => {
         {/* CTA Section */}
         <div className="mt-24 text-center p-8 bg-blue-600 rounded-lg text-white">
           <h3 className="text-3xl font-bold mb-4">Ready to boost your learning?</h3>
-          <p className="text-xl mb-6">Join thousands of students already using FlashGenius</p>
+          <p className="text-xl mb-6">Join thousands of students already using Zoomies</p>
           <Button 
             variant="secondary" 
             size="lg"
@@ -108,7 +110,7 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-600 dark:text-gray-400">
-        <p>&copy; 2024 FlashGenius. Built with ❤️ for learners everywhere.</p>
+        <p>&copy; 2024 Zoomies. Built with ❤️ by <span className="font-semibold">Zachary Ian P. Bautista</span> for learners everywhere.</p>
       </footer>
     </div>
   );

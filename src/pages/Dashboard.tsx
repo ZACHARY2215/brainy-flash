@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,9 @@ import {
   Star,
   Users,
   Calendar,
-  BarChart3
+  BarChart3,
+  Trash2,
+  Play
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 
@@ -47,41 +50,70 @@ const Dashboard = () => {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [favoriteSetIds, setFavoriteSetIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
-      const token = (await import("@/integrations/supabase/client")).supabase.auth.getSession();
-      
-      // Fetch user's sets
-      const setsResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/sets?user_id=${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const setsData = await setsResponse.json();
-      setSets(setsData);
+      // Fetch user's sets from Supabase
+      const { data: setsData, error: setsError } = await supabase
+        .from("sets")
+        .select(`
+          *,
+          flashcards(count),
+          study_sessions(count)
+        `)
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false });
 
-      // Fetch favorites
-      const favoritesResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/sets/user/favorites`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const favoritesData = await favoritesResponse.json();
-      setFavorites(favoritesData);
+      if (setsError) throw setsError;
 
-      // Fetch user stats
-      const statsResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const statsData = await statsResponse.json();
-      setStats(statsData);
+      // Fetch user's favorites
+      const { data: favoritesData, error: favoritesError } = await supabase
+        .from("favorites")
+        .select("set_id")
+        .eq("user_id", user?.id);
+
+      if (favoritesError) throw favoritesError;
+
+      const favoriteIds = new Set(favoritesData?.map(fav => fav.set_id) || []);
+      setFavoriteSetIds(favoriteIds);
+
+      // Transform the data to match our interface
+      const transformedSets = (setsData || []).map(set => ({
+        id: set.id,
+        title: set.title,
+        description: set.description || "",
+        tags: set.tags || [],
+        flashcard_count: set.flashcards?.[0]?.count || 0,
+        study_sessions_count: set.study_sessions?.[0]?.count || 0,
+        is_favorited: favoriteIds.has(set.id),
+        created_at: set.created_at,
+        updated_at: set.updated_at
+      }));
+
+      setSets(transformedSets);
+
+      // Filter favorites
+      const favoriteSets = transformedSets.filter(set => set.is_favorited);
+      setFavorites(favoriteSets);
+
+      // For now, use mock stats based on the data we have
+      const totalFlashcards = transformedSets.reduce((sum, set) => sum + set.flashcard_count, 0);
+      const mockStats: UserStats = {
+        total_sets: transformedSets.length,
+        total_flashcards: totalFlashcards,
+        total_sessions: transformedSets.reduce((sum, set) => sum + set.study_sessions_count, 0),
+        total_time_minutes: 0, // TODO: Implement actual study time tracking
+        accuracy_percentage: 85 // TODO: Implement actual accuracy calculation
+      };
+      setStats(mockStats);
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -97,11 +129,114 @@ const Dashboard = () => {
 
   const recentSets = sets.slice(0, 5);
 
+  const toggleFavorite = async (setId: string) => {
+    try {
+      const isCurrentlyFavorite = favoriteSetIds.has(setId);
+      
+      if (isCurrentlyFavorite) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from("favorites")
+          .delete()
+          .eq("user_id", user?.id)
+          .eq("set_id", setId);
+        
+        if (error) throw error;
+        
+        setFavoriteSetIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(setId);
+          return newSet;
+        });
+      } else {
+        // Add to favorites
+        const { error } = await supabase
+          .from("favorites")
+          .insert({
+            user_id: user?.id,
+            set_id: setId
+          });
+        
+        if (error) throw error;
+        
+        setFavoriteSetIds(prev => new Set(prev).add(setId));
+      }
+      
+      // Update the sets state
+      setSets(prev => prev.map(set => 
+        set.id === setId 
+          ? { ...set, is_favorited: !isCurrentlyFavorite }
+          : set
+      ));
+      
+      // Update favorites list
+      if (isCurrentlyFavorite) {
+        setFavorites(prev => prev.filter(set => set.id !== setId));
+      } else {
+        const setToAdd = sets.find(set => set.id === setId);
+        if (setToAdd) {
+          setFavorites(prev => [...prev, { ...setToAdd, is_favorited: true }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  };
+
+  const deleteSet = async (setId: string) => {
+    if (!confirm('Are you sure you want to delete this set? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      // Delete flashcards first (due to foreign key constraint)
+      const { error: flashcardsError } = await supabase
+        .from("flashcards")
+        .delete()
+        .eq("set_id", setId);
+      
+      if (flashcardsError) throw flashcardsError;
+      
+      // Delete the set
+      const { error: setError } = await supabase
+        .from("sets")
+        .delete()
+        .eq("id", setId)
+        .eq("user_id", user?.id);
+      
+      if (setError) throw setError;
+      
+      // Update local state
+      setSets(prev => prev.filter(set => set.id !== setId));
+      setFavorites(prev => prev.filter(set => set.id !== setId));
+      setFavoriteSetIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(setId);
+        return newSet;
+      });
+      
+      // Update stats
+      if (stats) {
+        const deletedSet = sets.find(set => set.id === setId);
+        if (deletedSet) {
+          setStats(prev => prev ? {
+            ...prev,
+            total_sets: prev.total_sets - 1,
+            total_flashcards: prev.total_flashcards - deletedSet.flashcard_count,
+            total_sessions: prev.total_sessions - deletedSet.study_sessions_count
+          } : null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting set:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 pt-24">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-muted rounded w-1/4"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -119,7 +254,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pt-24">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
           <div>
@@ -161,11 +296,11 @@ const Dashboard = () => {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Study Time</CardTitle>
+                <CardTitle className="text-sm font-medium">Study Sessions</CardTitle>
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.total_time_minutes}m</div>
+                <div className="text-2xl font-bold">{stats.total_sessions}</div>
               </CardContent>
             </Card>
 
@@ -213,9 +348,14 @@ const Dashboard = () => {
                           {set.description || "No description"}
                         </CardDescription>
                       </div>
-                      {set.is_favorited && (
-                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleFavorite(set.id)}
+                        className="p-1 h-auto"
+                      >
+                        <Star className={`h-4 w-4 ${set.is_favorited ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} />
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -252,6 +392,7 @@ const Dashboard = () => {
                       <div className="flex space-x-2">
                         <Link to={`/study/${set.id}`}>
                           <Button size="sm" variant="outline">
+                            <Play className="h-3 w-3 mr-1" />
                             Study
                           </Button>
                         </Link>
@@ -260,6 +401,13 @@ const Dashboard = () => {
                             Edit
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => deleteSet(set.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -298,7 +446,14 @@ const Dashboard = () => {
                           {set.description || "No description"}
                         </CardDescription>
                       </div>
-                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleFavorite(set.id)}
+                        className="p-1 h-auto"
+                      >
+                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -320,6 +475,7 @@ const Dashboard = () => {
                       <div className="flex space-x-2">
                         <Link to={`/study/${set.id}`}>
                           <Button size="sm" variant="outline">
+                            <Play className="h-3 w-3 mr-1" />
                             Study
                           </Button>
                         </Link>
@@ -328,6 +484,13 @@ const Dashboard = () => {
                             Edit
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => deleteSet(set.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -375,6 +538,7 @@ const Dashboard = () => {
                       <div className="flex space-x-2">
                         <Link to={`/study/${set.id}`}>
                           <Button size="sm" variant="outline">
+                            <Play className="h-3 w-3 mr-1" />
                             Study
                           </Button>
                         </Link>
@@ -383,6 +547,13 @@ const Dashboard = () => {
                             Edit
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => deleteSet(set.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

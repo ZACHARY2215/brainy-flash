@@ -58,49 +58,65 @@ router.post('/generate', authenticateUser, async (req, res) => {
     if (flashcards.length === 0 || flashcards.length < count) {
       const remainingCount = count - flashcards.length;
       
-      const prompt = `Generate ${remainingCount} educational flashcards from the following text. 
-      Each flashcard should have a clear term/concept and a concise description/definition.
-      Format each flashcard as: "Term: Description"
-      
-      Text: ${text}
-      
-      Generate ${remainingCount} flashcards:`;
-      
-      const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "You are an educational assistant that creates clear, concise flashcards. Each flashcard should have a term or concept on one side and a clear, educational description on the other."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 1000,
-        temperature: 0.7,
-      });
-      
-      const aiResponse = completion.choices[0].message.content;
-      const aiLines = aiResponse.split('\n').filter(line => line.trim());
-      
-      const aiFlashcards = aiLines
-        .map(line => {
-          if (line.includes(':')) {
-            const parts = line.split(':');
-            if (parts.length >= 2) {
-              return {
-                term: parts[0].trim(),
-                description: parts.slice(1).join(':').trim()
-              };
+      if (openai) {
+        // Use OpenAI if available
+        const prompt = `Generate ${remainingCount} educational flashcards from the following text. 
+        Each flashcard should have a clear term/concept and a concise description/definition.
+        Format each flashcard as: "Term: Description"
+        
+        Text: ${text}
+        
+        Generate ${remainingCount} flashcards:`;
+        
+        const completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are an educational assistant that creates clear, concise flashcards. Each flashcard should have a term or concept on one side and a clear, educational description on the other."
+            },
+            {
+              role: "user",
+              content: prompt
             }
-          }
-          return null;
-        })
-        .filter(card => card && card.term && card.description);
-      
-      flashcards = [...flashcards, ...aiFlashcards].slice(0, count);
+          ],
+          max_tokens: 1000,
+          temperature: 0.7,
+        });
+        
+        const aiResponse = completion.choices[0].message.content;
+        const aiLines = aiResponse.split('\n').filter(line => line.trim());
+        
+        const aiFlashcards = aiLines
+          .map(line => {
+            if (line.includes(':')) {
+              const parts = line.split(':');
+              if (parts.length >= 2) {
+                return {
+                  term: parts[0].trim(),
+                  description: parts.slice(1).join(':').trim()
+                };
+              }
+            }
+            return null;
+          })
+          .filter(card => card && card.term && card.description);
+        
+        flashcards = [...flashcards, ...aiFlashcards].slice(0, count);
+      } else {
+        // Fallback: create simple flashcards from text
+        const words = text.split(/\s+/).filter(word => word.length > 3);
+        const fallbackCards = [];
+        
+        for (let i = 0; i < Math.min(remainingCount, words.length); i++) {
+          fallbackCards.push({
+            term: words[i],
+            description: `Definition for ${words[i]}`
+          });
+        }
+        
+        flashcards = [...flashcards, ...fallbackCards].slice(0, count);
+      }
     }
     
     // Save flashcards to database

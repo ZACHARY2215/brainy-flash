@@ -13,8 +13,11 @@ import Dashboard from "./pages/Dashboard";
 import CreateSet from "./pages/CreateSet";
 import EditSet from "./pages/EditSet";
 import StudySet from "./pages/StudySet";
+import TestSet from "./pages/TestSet";
 import Profile from "./pages/Profile";
 import AuthPage from "./pages/AuthPage";
+import About from "./pages/About";
+import WhatsNew from "./pages/WhatsNew";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -37,6 +40,8 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<AuthPage />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/whats-new" element={<WhatsNew />} />
               
               {/* Protected Routes */}
               <Route path="/dashboard" element={
@@ -60,6 +65,12 @@ const App = () => (
               <Route path="/study/:setId" element={
                 <ProtectedRoute>
                   <StudySet />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/test/:setId" element={
+                <ProtectedRoute>
+                  <TestSet />
                 </ProtectedRoute>
               } />
               

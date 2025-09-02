@@ -1,0 +1,38 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A855F7;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lightPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A78BFA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C4B5FD;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Cat head -->
+  <circle cx="16" cy="18" r="12" fill="url(#purpleGradient)"/>
+  
+  <!-- Cat ears -->
+  <path d="M8 12 L12 6 L16 8 L20 6 L24 12 L22 14 L18 12 L14 14 L10 12 Z" fill="url(#purpleGradient)"/>
+  <path d="M10 10 L12 7 L14 9 L12 11 Z" fill="url(#lightPurple)"/>
+  <path d="M18 9 L20 7 L22 10 L20 11 Z" fill="url(#lightPurple)"/>
+  
+  <!-- Cat eyes -->
+  <ellipse cx="12" cy="16" rx="2" ry="3" fill="#000"/>
+  <ellipse cx="20" cy="16" rx="2" ry="3" fill="#000"/>
+  <circle cx="12" cy="15" r="1" fill="#FFF"/>
+  <circle cx="20" cy="15" r="1" fill="#FFF"/>
+  
+  <!-- Cat nose -->
+  <path d="M16 19 L15 21 L17 21 Z" fill="#FF69B4"/>
+  
+  <!-- Cat mouth -->
+  <path d="M16 21 Q14 23 12 22" stroke="#000" stroke-width="1" fill="none"/>
+  <path d="M16 21 Q18 23 20 22" stroke="#000" stroke-width="1" fill="none"/>
+  
+  <!-- Cat whiskers -->
+  <line x1="6" y1="18" x2="10" y2="19" stroke="#000" stroke-width="1"/>
+  <line x1="6" y1="20" x2="10" y2="20" stroke="#000" stroke-width="1"/>
+  <line x1="22" y1="19" x2="26" y2="18" stroke="#000" stroke-width="1"/>
+  <line x1="22" y1="20" x2="26" y2="20" stroke="#000" stroke-width="1"/>
+</svg>
