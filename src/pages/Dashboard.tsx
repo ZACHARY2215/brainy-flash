@@ -19,9 +19,15 @@ import {
   Calendar,
   BarChart3,
   Trash2,
-  Play
+  Play,
+  Share2,
+  Copy,
+  Eye,
+  Check,
+  User
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { useToast } from "@/hooks/use-toast";
 
 interface FlashcardSet {
   id: string;
@@ -33,6 +39,9 @@ interface FlashcardSet {
   is_favorited: boolean;
   created_at: string;
   updated_at: string;
+  creator_username?: string;
+  creator_name?: string;
+  is_public?: boolean;
 }
 
 interface UserStats {
@@ -45,6 +54,7 @@ interface UserStats {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [sets, setSets] = useState<FlashcardSet[]>([]);
   const [favorites, setFavorites] = useState<FlashcardSet[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -52,6 +62,8 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [favoriteSetIds, setFavoriteSetIds] = useState<Set<string>>(new Set());
+  const [sharingSetId, setSharingSetId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -61,7 +73,6 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch user's sets from Supabase
       const { data: setsData, error: setsError } = await supabase
         .from("sets")
         .select(`
@@ -74,7 +85,6 @@ const Dashboard = () => {
 
       if (setsError) throw setsError;
 
-      // Fetch public sets (excluding user's own to avoid duplication)
       const { data: publicData, error: publicError } = await supabase
         .from("sets")
         .select(`*, flashcards(count)`)
@@ -106,7 +116,10 @@ const Dashboard = () => {
         study_sessions_count: set.study_sessions?.[0]?.count || 0,
         is_favorited: favoriteIds.has(set.id),
         created_at: set.created_at,
-        updated_at: set.updated_at
+        updated_at: set.updated_at,
+        creator_username: user?.user_metadata?.username || user?.email,
+        creator_name: user?.user_metadata?.full_name || user?.email,
+        is_public: set.is_public
       }));
 
       setSets(transformedSets);
@@ -119,7 +132,10 @@ const Dashboard = () => {
         study_sessions_count: 0,
         is_favorited: false,
         created_at: set.created_at,
-        updated_at: set.updated_at
+        updated_at: set.updated_at,
+        creator_username: 'Community Member',
+        creator_name: 'Community Member',
+        is_public: true
       }));
       setPublicSets(transformedPublic);
 
@@ -227,6 +243,30 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
+    }
+  };
+
+  const shareSet = async (setId: string) => {
+    try {
+      setSharingSetId(setId);
+      
+      // For now, create a simple share URL since we're using Supabase
+      const shareUrl = `${window.location.origin}/shared/${setId}`;
+      setShareUrl(shareUrl);
+      
+      // Copy to clipboard
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({
+          title: "Link copied!",
+          description: "The share link has been copied to your clipboard.",
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error sharing set:', error);
+    } finally {
+      setSharingSetId(null);
     }
   };
 
@@ -438,10 +478,10 @@ const Dashboard = () => {
                         Updated {new Date(set.updated_at).toLocaleDateString()}
                       </div>
                       <div className="flex space-x-2">
-                        <Link to={`/study/${set.id}`}>
+                        <Link to={`/set/${set.id}`}>
                           <Button size="sm" variant="outline">
-                            <Play className="h-3 w-3 mr-1" />
-                            Study
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
                           </Button>
                         </Link>
                         <Link to={`/edit-set/${set.id}`}>
@@ -449,6 +489,15 @@ const Dashboard = () => {
                             Edit
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => shareSet(set.id)}
+                          disabled={sharingSetId === set.id}
+                        >
+                          <Share2 className="w-3 w-3 mr-1" />
+                          Share
+                        </Button>
                         <Button 
                           size="sm" 
                           variant="destructive"
@@ -645,6 +694,11 @@ const Dashboard = () => {
                         </Badge>
                       </div>
                     </div>
+                    
+                    <div className="flex items-center gap-1 mb-4 text-sm text-muted-foreground">
+                      <User className="w-4 h-4" />
+                      <span>By {set.creator_name || set.creator_username}</span>
+                    </div>
 
                     <div className="flex justify-between items-center">
                       <div className="text-xs text-muted-foreground">
@@ -662,6 +716,15 @@ const Dashboard = () => {
                             Study
                           </Button>
                         </Link>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => shareSet(set.id)}
+                          disabled={sharingSetId === set.id}
+                        >
+                          <Share2 className="w-3 w-3 mr-1" />
+                          Share
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

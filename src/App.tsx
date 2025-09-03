@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import AuthPage from "./pages/AuthPage";
 import About from "./pages/About";
 import WhatsNew from "./pages/WhatsNew";
+import SharedSetPreview from "./pages/SharedSetPreview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -83,6 +84,7 @@ const App = () => (
               
               {/* Public Routes */}
               <Route path="/set/:setId" element={<SetDetails />} />
+              <Route path="/shared/:token" element={<SharedSetPreview />} />
               
               {/* Catch-all route */}
               <Route path="*" element={<NotFound />} />

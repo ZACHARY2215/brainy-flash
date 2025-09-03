@@ -15,6 +15,7 @@ import setRoutes from './routes/sets.js';
 import studyRoutes from './routes/study.js';
 import aiRoutes from './routes/ai.js';
 import uploadRoutes from './routes/upload.js';
+import sharingRoutes from './routes/sharing.js';
 
 // Import database connection
 import { connectDB } from './config/database.js';
@@ -78,6 +79,7 @@ app.use('/api/sets', setRoutes);
 app.use('/api/study', studyRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/sharing', sharingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

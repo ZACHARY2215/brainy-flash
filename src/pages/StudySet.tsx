@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { ArrowLeft, RotateCcw, ChevronLeft, ChevronRight, CheckCircle, Target } from "lucide-react";
+import { Flashcard } from "@/components/ui/flashcard";
 
 
 interface Flashcard {
@@ -73,16 +74,13 @@ const StudySet = () => {
 
   const nextCard = () => {
     if (!flashcardSet) return;
-    
     if (!studiedCards.includes(currentCardIndex)) {
       setStudiedCards([...studiedCards, currentCardIndex]);
     }
-    
     if (currentCardIndex < flashcardSet.flashcards.length - 1) {
       setCurrentCardIndex(currentCardIndex + 1);
       setIsFlipped(false);
     } else {
-      // This is the last card, mark as completed
       if (!studiedCards.includes(currentCardIndex)) {
         setStudiedCards([...studiedCards, currentCardIndex]);
       }
@@ -237,70 +235,66 @@ const StudySet = () => {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto">
-          <Card className="min-h-[300px] cursor-pointer" onClick={() => setIsFlipped(!isFlipped)}>
-            <CardContent className="p-8 flex items-center justify-center text-center">
-              <div className="w-full">
-                {!isFlipped ? (
-                  <div>
-                    <h3 className="text-lg font-medium text-muted-foreground mb-2">Term</h3>
-                    <p className="text-2xl font-semibold">{currentCard.term}</p>
-                    {currentCard.image_url && (
-                      <img
-                        src={currentCard.image_url}
-                        alt="Flashcard"
-                        className="mt-4 max-w-full h-auto mx-auto rounded-lg"
-                      />
-                    )}
-                    <p className="text-sm text-muted-foreground mt-4">
-                      Click to reveal answer
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <h3 className="text-lg font-medium text-muted-foreground mb-2">Definition</h3>
-                    <p className="text-xl">{currentCard.description}</p>
-                    <p className="text-sm text-muted-foreground mt-4">
-                      Click to show term
-                    </p>
-                  </div>
+        <div className="max-w-2xl mx-auto [perspective:1200px]">
+          <Flashcard
+            className="min-h-[300px]"
+            front={
+              <div>
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">Term</h3>
+                <p className="text-2xl font-semibold">{currentCard.term}</p>
+                {currentCard.image_url && (
+                  <img
+                    src={currentCard.image_url}
+                    alt="Flashcard"
+                    className="mt-4 max-w-full h-auto mx-auto rounded-lg"
+                  />
                 )}
+                <p className="text-sm text-muted-foreground mt-4">Click to reveal answer</p>
               </div>
-            </CardContent>
-          </Card>
+            }
+            back={
+              <div>
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">Definition</h3>
+                <p className="text-xl">{currentCard.description}</p>
+                <p className="text-sm text-muted-foreground mt-4">Click to show term</p>
+              </div>
+            }
+            isFlipped={isFlipped}
+            onFlip={() => setIsFlipped(!isFlipped)}
+          />
+        </div>
 
-          <div className="flex justify-between items-center mt-6">
-            <Button
-              variant="outline"
-              onClick={prevCard}
-              disabled={currentCardIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Previous
+        <div className="flex justify-between items-center mt-6">
+          <Button
+            variant="outline"
+            onClick={prevCard}
+            disabled={currentCardIndex === 0}
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Previous
+          </Button>
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={resetStudy}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset
             </Button>
-
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={resetStudy}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-
-            {isLastCard ? (
-              <Button onClick={handleFinish} disabled={!isFlipped}>
-                Finish
-                <CheckCircle className="h-4 w-4 ml-2" />
-              </Button>
-            ) : (
-              <Button
-                onClick={nextCard}
-                disabled={!isFlipped}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-            )}
           </div>
+
+          {isLastCard ? (
+            <Button onClick={handleFinish} disabled={!isFlipped}>
+              Finish
+              <CheckCircle className="h-4 w-4 ml-2" />
+            </Button>
+          ) : (
+            <Button
+              onClick={nextCard}
+              disabled={!isFlipped}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-2" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

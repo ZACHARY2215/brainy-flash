@@ -6,10 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 
-// Initialize OpenAI
-const openai = new OpenAI({
+// Initialize OpenAI (optional)
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
+}) : null;
 
 // Generate flashcards from text
 router.post('/generate', authenticateUser, async (req, res) => {
@@ -26,7 +26,7 @@ router.post('/generate', authenticateUser, async (req, res) => {
     const [sets] = await db.execute(
       `SELECT s.* FROM sets s
        LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
-       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('write', 'admin'))`,
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('editor', 'owner'))`,
       [req.user.id, set_id, req.user.id]
     );
     
@@ -102,7 +102,7 @@ router.post('/generate', authenticateUser, async (req, res) => {
           })
           .filter(card => card && card.term && card.description);
         
-        flashcards = [...flashcards, ...aiFlashcards].slice(0, count);
+        flashcards = [...flashcards, ...aiFlashcards];
       } else {
         // Fallback: create simple flashcards from text
         const words = text.split(/\s+/).filter(word => word.length > 3);
@@ -115,36 +115,33 @@ router.post('/generate', authenticateUser, async (req, res) => {
           });
         }
         
-        flashcards = [...flashcards, ...fallbackCards].slice(0, count);
+        flashcards = [...flashcards, ...fallbackCards];
       }
     }
     
-    // Save flashcards to database
-    const savedFlashcards = [];
+    // Limit to requested count
+    flashcards = flashcards.slice(0, count);
+    
+    // Insert flashcards into database
+    const insertedFlashcards = [];
     for (const card of flashcards) {
-      const flashcardId = uuidv4();
-      
-      await db.execute(
+      const [result] = await db.execute(
         'INSERT INTO flashcards (id, set_id, term, description) VALUES (?, ?, ?, ?)',
-        [flashcardId, set_id, card.term, card.description]
+        [uuidv4(), set_id, card.term, card.description]
       );
       
-      savedFlashcards.push({
-        id: flashcardId,
-        set_id,
-        term: card.term,
-        description: card.description,
-        created_at: new Date()
+      insertedFlashcards.push({
+        id: result.insertId,
+        ...card
       });
     }
     
     res.json({
-      message: `Generated ${savedFlashcards.length} flashcards`,
-      flashcards: savedFlashcards
+      flashcards: insertedFlashcards,
+      count: insertedFlashcards.length
     });
-    
   } catch (error) {
-    console.error('AI generation error:', error);
+    console.error('Generate flashcards error:', error);
     res.status(500).json({ error: 'Failed to generate flashcards' });
   }
 });
@@ -181,7 +178,7 @@ router.post('/multiple-choice', authenticateUser, async (req, res) => {
     const distractors = otherFlashcards.map(f => f.description);
     
     // Generate additional distractors using AI if needed
-    if (distractors.length < count) {
+    if (distractors.length < count && openai) {
       const prompt = `Generate ${count - distractors.length} plausible but incorrect answers for this question:
       
       Question: ${flashcard.term}
@@ -239,6 +236,118 @@ router.post('/multiple-choice', authenticateUser, async (req, res) => {
   }
 });
 
+// Generate identification test
+router.post('/identification', authenticateUser, async (req, res) => {
+  try {
+    const { set_id, count = 10 } = req.body;
+    
+    if (!set_id) {
+      return res.status(400).json({ error: 'Set ID is required' });
+    }
+    
+    const db = getDB();
+    
+    // Check if user has access to this set
+    const [sets] = await db.execute(
+      `SELECT s.* FROM sets s
+       LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('viewer', 'editor', 'owner'))`,
+      [req.user.id, set_id, req.user.id]
+    );
+    
+    if (sets.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get flashcards from the set
+    const [flashcards] = await db.execute(
+      'SELECT * FROM flashcards WHERE set_id = ? ORDER BY RANDOM() LIMIT ?',
+      [set_id, count]
+    );
+    
+    if (flashcards.length === 0) {
+      return res.status(404).json({ error: 'No flashcards found in this set' });
+    }
+    
+    // Generate identification questions
+    const questions = flashcards.map((card, index) => ({
+      id: index + 1,
+      question: card.term,
+      answer: card.description,
+      type: 'identification'
+    }));
+    
+    res.json({
+      test_type: 'identification',
+      questions: questions,
+      total_questions: questions.length
+    });
+    
+  } catch (error) {
+    console.error('Identification test generation error:', error);
+    res.status(500).json({ error: 'Failed to generate identification test' });
+  }
+});
+
+// Generate matching type test
+router.post('/matching', authenticateUser, async (req, res) => {
+  try {
+    const { set_id, count = 10 } = req.body;
+    
+    if (!set_id) {
+      return res.status(400).json({ error: 'Set ID is required' });
+    }
+    
+    const db = getDB();
+    
+    // Check if user has access to this set
+    const [sets] = await db.execute(
+      `SELECT s.* FROM sets s
+       LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('viewer', 'editor', 'owner'))`,
+      [req.user.id, set_id, req.user.id]
+    );
+    
+    if (sets.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get flashcards from the set
+    const [flashcards] = await db.execute(
+      'SELECT * FROM flashcards WHERE set_id = ? ORDER BY RANDOM() LIMIT ?',
+      [set_id, count]
+    );
+    
+    if (flashcards.length === 0) {
+      return res.status(404).json({ error: 'No flashcards found in this set' });
+    }
+    
+    // Create matching pairs
+    const terms = flashcards.map(card => card.term);
+    const descriptions = flashcards.map(card => card.description);
+    
+    // Shuffle descriptions
+    const shuffledDescriptions = descriptions.sort(() => Math.random() - 0.5);
+    
+    const questions = terms.map((term, index) => ({
+      id: index + 1,
+      term: term,
+      description: shuffledDescriptions[index],
+      correct_match: descriptions[index]
+    }));
+    
+    res.json({
+      test_type: 'matching',
+      questions: questions,
+      total_questions: questions.length
+    });
+    
+  } catch (error) {
+    console.error('Matching test generation error:', error);
+    res.status(500).json({ error: 'Failed to generate matching test' });
+  }
+});
+
 // Generate study suggestions
 router.post('/suggestions', authenticateUser, async (req, res) => {
   try {
@@ -281,33 +390,36 @@ router.post('/suggestions', authenticateUser, async (req, res) => {
     });
     
     // Generate study suggestions using AI
-    const prompt = `Based on these flashcards, suggest 3 effective study strategies:
-    
-    Flashcards: ${flashcards.map(f => `${f.term}: ${f.description}`).join('\n')}
-    
-    Suggest 3 specific study strategies:`;
-    
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are an educational expert that provides practical study advice."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      max_tokens: 400,
-      temperature: 0.7,
-    });
-    
-    const suggestions = completion.choices[0].message.content
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => line.replace(/^\d+\.\s*/, '').trim())
-      .filter(line => line.length > 0);
+    let suggestions = [];
+    if (openai) {
+      const prompt = `Based on these flashcards, suggest 3 effective study strategies:
+      
+      Flashcards: ${flashcards.map(f => `${f.term}: ${f.description}`).join('\n')}
+      
+      Suggest 3 specific study strategies:`;
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are an educational expert that provides practical study advice."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      });
+      
+      suggestions = completion.choices[0].message.content
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(line => line.length > 0);
+    }
     
     res.json({
       total_cards: flashcards.length,
@@ -322,6 +434,292 @@ router.post('/suggestions', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Study suggestions error:', error);
     res.status(500).json({ error: 'Failed to generate study suggestions' });
+  }
+});
+
+// Generate AI review notes for a flashcard
+router.post('/review-notes/:flashcardId', authenticateUser, async (req, res) => {
+  try {
+    const { flashcardId } = req.params;
+    const { include_examples = true, include_mnemonics = true } = req.body;
+    
+    const db = getDB();
+    
+    // Get flashcard details
+    const [flashcards] = await db.execute(
+      `SELECT f.*, s.title as set_title, s.tags as set_tags
+       FROM flashcards f
+       JOIN sets s ON f.set_id = s.id
+       WHERE f.id = ?`,
+      [flashcardId]
+    );
+    
+    if (flashcards.length === 0) {
+      return res.status(404).json({ error: 'Flashcard not found' });
+    }
+    
+    const flashcard = flashcards[0];
+    
+    // Check if user has access to this set
+    const [sets] = await db.execute(
+      `SELECT s.* FROM sets s
+       LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('viewer', 'editor', 'owner'))`,
+      [req.user.id, flashcard.set_id, req.user.id]
+    );
+    
+    if (sets.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!openai) {
+      return res.status(503).json({ error: 'AI service not available' });
+    }
+    
+    // Generate comprehensive review notes
+    const prompt = `Generate comprehensive review notes for the following flashcard:
+
+Term: ${flashcard.term}
+Description: ${flashcard.description}
+Set: ${flashcard.set_title}
+Tags: ${flashcard.set_tags?.join(', ') || 'None'}
+
+Please provide structured, concise notes that include:
+1. Key concepts and definitions
+2. Important details to remember
+3. ${include_examples ? 'Practical examples or applications' : ''}
+4. ${include_mnemonics ? 'Memory aids or mnemonics' : ''}
+5. Related concepts or connections
+6. Study tips
+
+Format the response in a clear, structured manner that's easy to study from.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert educational tutor who creates clear, structured review notes for flashcards. Your notes should be concise yet comprehensive, organized in a logical flow that aids learning and retention."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 800,
+      temperature: 0.6,
+    });
+    
+    const reviewNotes = completion.choices[0].message.content;
+    
+    // Update flashcard with AI review notes
+    await db.execute(
+      'UPDATE flashcards SET ai_review_notes = ? WHERE id = ?',
+      [reviewNotes, flashcardId]
+    );
+    
+    res.json({
+      flashcard_id: flashcardId,
+      review_notes: reviewNotes,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Generate review notes error:', error);
+    res.status(500).json({ error: 'Failed to generate review notes' });
+  }
+});
+
+// Generate AI review notes for an entire set
+router.post('/review-notes-set/:setId', authenticateUser, async (req, res) => {
+  try {
+    const { setId } = req.params;
+    const { include_examples = true, include_mnemonics = true } = req.body;
+    
+    const db = getDB();
+    
+    // Check if user has access to this set
+    const [sets] = await db.execute(
+      `SELECT s.* FROM sets s
+       LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('viewer', 'editor', 'owner'))`,
+      [req.user.id, setId, req.user.id]
+    );
+    
+    if (sets.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const set = sets[0];
+    
+    // Get all flashcards in the set
+    const [flashcards] = await db.execute(
+      'SELECT * FROM flashcards WHERE set_id = ? ORDER BY created_at ASC',
+      [setId]
+    );
+    
+    if (flashcards.length === 0) {
+      return res.status(404).json({ error: 'No flashcards found in this set' });
+    }
+    
+    if (!openai) {
+      return res.status(503).json({ error: 'AI service not available' });
+    }
+    
+    // Generate comprehensive set review notes
+    const prompt = `Generate comprehensive review notes for the following flashcard set:
+
+Set Title: ${set.title}
+Description: ${set.description || 'No description'}
+Tags: ${set.tags?.join(', ') || 'None'}
+Number of Cards: ${flashcards.length}
+
+Flashcards:
+${flashcards.map((card, index) => `${index + 1}. Term: ${card.term} | Description: ${card.description}`).join('\n')}
+
+Please provide:
+1. Overall set summary and key themes
+2. Important concepts to focus on
+3. Connections between different cards
+4. Study strategies for this set
+5. Common pitfalls or areas of confusion
+6. ${include_examples ? 'Practical examples that connect multiple concepts' : ''}
+7. ${include_mnemonics ? 'Memory techniques for this subject area' : ''}
+
+Format the response in a clear, structured manner that's easy to study from.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert educational tutor who creates comprehensive review notes for entire flashcard sets. Your notes should provide a holistic understanding of the subject matter and help students see connections between concepts."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 1200,
+      temperature: 0.6,
+    });
+    
+    const setReviewNotes = completion.choices[0].message.content;
+    
+    // Store set review notes (you might want to create a separate table for this)
+    // For now, we'll store it in the set description or create a new field
+    
+    res.json({
+      set_id: setId,
+      set_review_notes: setReviewNotes,
+      generated_at: new Date().toISOString(),
+      flashcards_processed: flashcards.length
+    });
+  } catch (error) {
+    console.error('Generate set review notes error:', error);
+    res.status(500).json({ error: 'Failed to generate set review notes' });
+  }
+});
+
+// Get AI-generated insights for study recommendations
+router.get('/study-insights/:setId', authenticateUser, async (req, res) => {
+  try {
+    const { setId } = req.params;
+    const db = getDB();
+    
+    // Check if user has access to this set
+    const [sets] = await db.execute(
+      `SELECT s.* FROM sets s
+       LEFT JOIN collaborators c ON s.id = c.set_id AND c.user_id = ?
+       WHERE s.id = ? AND (s.user_id = ? OR c.permission IN ('viewer', 'editor', 'owner'))`,
+      [req.user.id, setId, req.user.id]
+    );
+    
+    if (sets.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get study progress data
+    const [progress] = await db.execute(
+      `SELECT 
+         sp.*,
+         f.term,
+         f.description,
+         f.ai_review_notes
+       FROM study_progress sp
+       JOIN flashcards f ON sp.flashcard_id = f.id
+       WHERE f.set_id = ? AND sp.user_id = ?
+       ORDER BY sp.last_studied DESC`,
+      [setId, req.user.id]
+    );
+    
+    // Get recent study sessions
+    const [sessions] = await db.execute(
+      `SELECT * FROM study_sessions 
+       WHERE set_id = ? AND user_id = ?
+       ORDER BY started_at DESC
+       LIMIT 10`,
+      [setId, req.user.id]
+    );
+    
+    if (!openai) {
+      return res.status(503).json({ error: 'AI service not available' });
+    }
+    
+    // Generate personalized study insights
+    const prompt = `Based on the following study data, provide personalized study recommendations:
+
+Set: ${sets[0].title}
+Study Progress: ${progress.length} cards with progress data
+Recent Sessions: ${sessions.length} study sessions
+
+Progress Summary:
+${progress.map(p => `- ${p.term}: ${p.correct_count} correct, ${p.incorrect_count} incorrect, difficulty: ${p.difficulty_rating}`).join('\n')}
+
+Recent Study Activity:
+${sessions.map(s => `- ${s.mode} mode: ${s.cards_studied} cards, ${s.correct_answers} correct, ${Math.round(s.total_time_seconds / 60)} minutes`).join('\n')}
+
+Please provide:
+1. Areas that need more focus
+2. Recommended study strategies
+3. Optimal study timing
+4. Difficulty level adjustments
+5. Specific cards to review
+6. Study mode recommendations
+
+Format as clear, actionable advice.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert study coach who analyzes learning data to provide personalized, actionable study recommendations. Your advice should be specific, practical, and tailored to the individual's learning patterns."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 600,
+      temperature: 0.5,
+    });
+    
+    const studyInsights = completion.choices[0].message.content;
+    
+    res.json({
+      set_id: setId,
+      study_insights: studyInsights,
+      generated_at: new Date().toISOString(),
+      progress_summary: {
+        total_cards: progress.length,
+        cards_studied: progress.filter(p => p.last_studied).length,
+        average_accuracy: progress.length > 0 ? 
+          Math.round(progress.reduce((sum, p) => sum + (p.correct_count / (p.correct_count + p.incorrect_count)), 0) / progress.length * 100) : 0
+      }
+    });
+  } catch (error) {
+    console.error('Get study insights error:', error);
+    res.status(500).json({ error: 'Failed to get study insights' });
   }
 });
 

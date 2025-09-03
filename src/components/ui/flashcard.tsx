@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const flashcardVariants = cva(
-  "relative w-full transition-all duration-500 transform-style-preserve-3d cursor-pointer select-none",
+  "relative w-full transform-style-preserve-3d cursor-pointer select-none",
   {
     variants: {
       size: {
@@ -12,8 +12,8 @@ const flashcardVariants = cva(
         large: "h-64 md:h-80",
       },
       state: {
-        default: "hover:shadow-floating hover:-translate-y-1",
-        flipped: "rotate-y-180",
+        default: "transition-all duration-300",
+        flipped: "rotate-x-180",
         correct: "ring-2 ring-success shadow-glow",
         incorrect: "ring-2 ring-destructive shadow-glow",
       },
@@ -31,7 +31,7 @@ const flashcardFaceVariants = cva(
     variants: {
       side: {
         front: "bg-gradient-card border-border shadow-card",
-        back: "bg-gradient-primary text-primary-foreground border-primary rotate-y-180",
+        back: "bg-gradient-primary text-primary-foreground border-primary",
       },
     },
     defaultVariants: {
@@ -51,14 +51,33 @@ export interface FlashcardProps
 
 const Flashcard = React.forwardRef<HTMLDivElement, FlashcardProps>(
   ({ className, size, state, front, back, isFlipped = false, onFlip, ...props }, ref) => {
+    const [shouldAnimate, setShouldAnimate] = React.useState(false);
+    const [internalFlipped, setInternalFlipped] = React.useState(isFlipped);
+
+    // Handle external prop changes (reset without animation)
+    React.useEffect(() => {
+      if (isFlipped !== internalFlipped) {
+        setInternalFlipped(isFlipped);
+        setShouldAnimate(false); // disables animation on reset
+      }
+    }, [isFlipped, internalFlipped]);
+
+    const handleClick = () => {
+      setShouldAnimate(true);
+      setInternalFlipped(!internalFlipped);
+      onFlip?.();
+    };
+
     return (
       <div
         ref={ref}
         className={cn(
-          flashcardVariants({ size, state: isFlipped ? "flipped" : state }),
+          flashcardVariants({ size, state }),
+          internalFlipped && "rotate-x-180",
+          shouldAnimate && "transition-transform duration-500 ease-in-out",
           className
         )}
-        onClick={onFlip}
+        onClick={handleClick}
         style={{ transformStyle: "preserve-3d" }}
         {...props}
       >
@@ -79,7 +98,10 @@ const Flashcard = React.forwardRef<HTMLDivElement, FlashcardProps>(
         </div>
 
         {/* Back face */}
-        <div className={cn(flashcardFaceVariants({ side: "back" }))}>
+        <div 
+          className={cn(flashcardFaceVariants({ side: "back" }))} 
+          style={{ transform: "rotateX(180deg)" }}
+        >
           <div className="flex-1 flex items-center justify-center">
             {typeof back === "string" ? (
               <p className="text-base md:text-lg text-primary-foreground leading-relaxed">
