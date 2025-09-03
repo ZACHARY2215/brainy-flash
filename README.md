@@ -271,7 +271,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Zachary Ian P. Bautista**
 - Full-Stack Developer & Learning Technology Enthusiast
-- Created with 💕 for his special girlfriend
+- Created with 💕 for his girlfriend
 
 ## 🙏 Acknowledgments
 
@@ -292,4 +292,4 @@ If you have any questions or need help:
 
 **Made with ❤️ by Zachary Ian P. Bautista**
 
-*"This website is created with love for his special girlfriend"* 💕
+*"This website is created with love for his girlfriend"* 💕
