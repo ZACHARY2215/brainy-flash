@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useToast } from "@/hooks/use-toast";
+import ShareSetDialog from "@/components/ShareSetDialog";
 
 interface FlashcardSet {
   id: string;
@@ -64,8 +65,8 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [favoriteSetIds, setFavoriteSetIds] = useState<Set<string>>(new Set());
-  const [sharingSetId, setSharingSetId] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareSetData, setShareSetData] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -250,54 +251,9 @@ const Dashboard = () => {
     }
   };
 
-  const shareSet = async (setId: string) => {
-    try {
-      setSharingSetId(setId);
-      
-      // Call backend API to generate shareable link
-      const response = await fetch(`/api/sharing/${setId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          expires_at: null // No expiration for now
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create share link');
-      }
-      
-      const data = await response.json();
-      const shareUrl = data.share_url;
-      setShareUrl(shareUrl);
-      
-      // Copy to clipboard
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareUrl);
-        toast({
-          title: "Link copied!",
-          description: "The share link has been copied to your clipboard.",
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error sharing set:', error);
-      // Fallback to simple URL if backend fails
-      const fallbackUrl = `${window.location.origin}/shared/${setId}`;
-      setShareUrl(fallbackUrl);
-      
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(fallbackUrl);
-        toast({
-          title: "Link copied!",
-          description: "The share link has been copied to your clipboard.",
-        });
-      }
-    } finally {
-      setSharingSetId(null);
-    }
+  const shareSet = (setId: string, setTitle: string) => {
+    setShareSetData({ id: setId, title: setTitle });
+    setShareDialogOpen(true);
   };
 
   const deleteSet = async (setId: string) => {
@@ -525,20 +481,10 @@ const Dashboard = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => shareSet(set.id)}
-                          disabled={sharingSetId === set.id}
+                          onClick={() => shareSet(set.id, set.title)}
                         >
-                        {sharingSetId === set.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Creating...
-                          </>
-                        ) : (
-                          <>
-                            <Share2 className="h-4 w-4 mr-2" />
-                            Copy Link
-                          </>
-                        )}
+                          <Share2 className="h-4 w-4 mr-2" />
+                          Share
                       </Button>
                         <Button 
                           size="sm" 
@@ -761,20 +707,10 @@ const Dashboard = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => shareSet(set.id)}
-                          disabled={sharingSetId === set.id}
+                          onClick={() => shareSet(set.id, set.title)}
                         >
-                          {sharingSetId === set.id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="h-4 w-4 mr-2" />
-                              Copy Link
-                            </>
-                          )}
+                          <Share2 className="h-4 w-4 mr-2" />
+                          Share
                         </Button>
                       </div>
                     </div>
@@ -792,6 +728,16 @@ const Dashboard = () => {
             )}
           </TabsContent>
         </Tabs>
+        
+        {/* Share Dialog */}
+        {shareSetData && (
+          <ShareSetDialog
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+            setId={shareSetData.id}
+            setTitle={shareSetData.title}
+          />
+        )}
       </div>
     </div>
   );
