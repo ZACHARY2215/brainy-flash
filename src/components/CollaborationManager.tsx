@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Users, Plus, Trash2, Mail } from 'lucide-react';
+import { Users, Plus, Trash2, Mail, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Collaborator {
   id: string;
@@ -26,6 +28,7 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
   setId,
   currentUserPermission
 }) => {
+  const { user } = useAuth();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -34,21 +37,45 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
   const fetchCollaborators = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/sets/${setId}/collaborators`);
-      if (response.ok) {
-        const data = await response.json();
-        setCollaborators(data);
-      }
+      const { data, error } = await supabase
+        .from('collaborators')
+        .select('*')
+        .eq('set_id', setId);
+
+      if (error) throw error;
+      
+      // Fetch profile data separately for each collaborator
+      const formattedData = await Promise.all((data || []).map(async (collab) => {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('user_id', collab.user_id)
+          .single();
+        
+        return {
+          id: collab.id,
+          user_id: collab.user_id,
+          username: profile?.username || 'Unknown',
+          full_name: profile?.full_name || 'Unknown User',
+          permission: collab.permission as 'viewer' | 'editor' | 'owner',
+          created_at: collab.created_at
+        };
+      }));
+      
+      setCollaborators(formattedData);
     } catch (error) {
       console.error('Error fetching collaborators:', error);
+      toast.error('Failed to fetch collaborators');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCollaborators();
-  }, [setId]);
+    if (currentUserPermission !== 'viewer') {
+      fetchCollaborators();
+    }
+  }, [setId, currentUserPermission]);
 
   const addCollaborator = async () => {
     if (!email.trim()) {
@@ -57,25 +84,40 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
     }
 
     try {
-      const response = await fetch(`/api/sets/${setId}/collaborators`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          permission
-        })
-      });
+      // First find the user by email in profiles
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .ilike('username', `%${email.trim()}%`)
+        .limit(1);
 
-      if (response.ok) {
-        toast.success('Collaborator added successfully');
-        setEmail('');
-        fetchCollaborators();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to add collaborator');
+      if (profileError) throw profileError;
+      
+      if (!profiles || profiles.length === 0) {
+        toast.error('User not found. They may need to sign up first.');
+        return;
       }
+
+      const { error } = await supabase
+        .from('collaborators')
+        .insert({
+          set_id: setId,
+          user_id: profiles[0].user_id,
+          permission
+        });
+
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          toast.error('User is already a collaborator');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Collaborator added successfully');
+      setEmail('');
+      fetchCollaborators();
     } catch (error) {
       console.error('Error adding collaborator:', error);
       toast.error('Failed to add collaborator');
@@ -84,16 +126,15 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
 
   const removeCollaborator = async (collaboratorId: string) => {
     try {
-      const response = await fetch(`/api/sets/${setId}/collaborators/${collaboratorId}`, {
-        method: 'DELETE'
-      });
+      const { error } = await supabase
+        .from('collaborators')
+        .delete()
+        .eq('id', collaboratorId);
 
-      if (response.ok) {
-        toast.success('Collaborator removed');
-        fetchCollaborators();
-      } else {
-        toast.error('Failed to remove collaborator');
-      }
+      if (error) throw error;
+
+      toast.success('Collaborator removed');
+      fetchCollaborators();
     } catch (error) {
       console.error('Error removing collaborator:', error);
       toast.error('Failed to remove collaborator');
@@ -102,20 +143,15 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
 
   const updatePermission = async (collaboratorId: string, newPermission: string) => {
     try {
-      const response = await fetch(`/api/sets/${setId}/collaborators/${collaboratorId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ permission: newPermission })
-      });
+      const { error } = await supabase
+        .from('collaborators')
+        .update({ permission: newPermission })
+        .eq('id', collaboratorId);
 
-      if (response.ok) {
-        toast.success('Permission updated');
-        fetchCollaborators();
-      } else {
-        toast.error('Failed to update permission');
-      }
+      if (error) throw error;
+
+      toast.success('Permission updated');
+      fetchCollaborators();
     } catch (error) {
       console.error('Error updating permission:', error);
       toast.error('Failed to update permission');
@@ -136,26 +172,28 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Add Collaborator */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Enter email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="flex-1"
-          />
-          <Select value={permission} onValueChange={(value: 'viewer' | 'editor') => setPermission(value)}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="viewer">Viewer</SelectItem>
-              <SelectItem value="editor">Editor</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={addCollaborator} disabled={loading}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
+        {currentUserPermission === 'owner' && (
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter username or email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="flex-1"
+            />
+            <Select value={permission} onValueChange={(value: 'viewer' | 'editor') => setPermission(value)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="editor">Editor</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={addCollaborator} disabled={loading}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         {/* Collaborators List */}
         <div className="space-y-2">
@@ -166,8 +204,8 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
                   <Mail className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="font-medium">{collaborator.full_name || collaborator.username}</p>
-                  <p className="text-sm text-muted-foreground">{collaborator.username}</p>
+                  <p className="font-medium">{collaborator.full_name}</p>
+                  <p className="text-sm text-muted-foreground">@{collaborator.username}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -201,6 +239,16 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
             </div>
           ))}
         </div>
+
+        {collaborators.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No collaborators yet</p>
+            {currentUserPermission === 'owner' && (
+              <p className="text-sm">Add collaborators to share editing access</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

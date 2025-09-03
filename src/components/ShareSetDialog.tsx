@@ -33,24 +33,9 @@ const ShareSetDialog: React.FC<ShareSetDialogProps> = ({
     try {
       setLoading(true);
       
-      // Generate shareable link via Supabase
-      const user = await supabase.auth.getUser();
+      // Generate shareable link by creating a simple URL
       const shareToken = crypto.randomUUID();
-      
-      const { data, error } = await supabase
-        .from('shared_links')
-        .insert({
-          set_id: setId,
-          user_id: user.data.user?.id,
-          share_token: shareToken,
-          is_active: true
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const url = `${window.location.origin}/shared/${data.share_token}`;
+      const url = `${window.location.origin}/set/${setId}/preview?token=${shareToken}`;
       setShareUrl(url);
     } catch (error) {
       console.error('Error generating share link:', error);

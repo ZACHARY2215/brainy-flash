@@ -29,7 +29,8 @@ interface PreviewSet {
 }
 
 const SetPreview = () => {
-  const { setId, token } = useParams();
+  const { setId } = useParams();
+  const token = new URLSearchParams(window.location.search).get('token');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -37,7 +38,7 @@ const SetPreview = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!setId && !token) {
+    if (!setId) {
       setError('Invalid preview link');
       setLoading(false);
       return;
@@ -47,62 +48,29 @@ const SetPreview = () => {
       try {
         let setData, flashcardsData;
 
-        if (token) {
-          // Fetch via shared link  
-          const { data: sharedData, error: sharedError } = await supabase
-            .from('shared_links')
-            .select('set_id')
-            .eq('share_token', token)
-            .eq('is_active', true)
-            .single();
+        // Just fetch the public set directly by ID
+        const { data: set, error: setError } = await supabase
+          .from('sets')
+          .select(`
+            *,
+            profiles (username, full_name)
+          `)
+          .eq('id', setId)
+          .eq('is_public', true)
+          .single();
 
-          if (sharedError) throw new Error('Share link not found or expired');
-          
-          const { data: set, error: setError } = await supabase
-            .from('sets')
-            .select(`
-              *,
-              profiles (username, full_name)
-            `)
-            .eq('id', sharedData.set_id)
-            .single();
+        if (setError) throw new Error('Set not found or not public');
+        
+        setData = set;
+        
+        const { data: cards, error: cardsError } = await supabase
+          .from('flashcards')
+          .select('*')
+          .eq('set_id', setId)
+          .order('created_at');
 
-          if (setError) throw setError;
-          setData = set;
-          
-          const { data: cards, error: cardsError } = await supabase
-            .from('flashcards')
-            .select('*')
-            .eq('set_id', sharedData.set_id)
-            .order('created_at');
-
-          if (cardsError) throw cardsError;
-          flashcardsData = cards;
-        } else {
-          // Fetch public set directly
-          const { data: set, error: setError } = await supabase
-            .from('sets')
-            .select(`
-              *,
-              profiles (username, full_name)
-            `)
-            .eq('id', setId)
-            .eq('is_public', true)
-            .single();
-
-          if (setError) throw new Error('Set not found or not public');
-          
-          setData = set;
-          
-          const { data: cards, error: cardsError } = await supabase
-            .from('flashcards')
-            .select('*')
-            .eq('set_id', setId)
-            .order('created_at');
-
-          if (cardsError) throw cardsError;
-          flashcardsData = cards;
-        }
+        if (cardsError) throw cardsError;
+        flashcardsData = cards;
 
         setPreviewSet({
           ...setData,

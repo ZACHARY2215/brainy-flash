@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      collaborators: {
+        Row: {
+          created_at: string
+          id: string
+          permission: string
+          set_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission: string
+          set_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission?: string
+          set_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborators_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string
@@ -45,8 +80,10 @@ export type Database = {
       }
       flashcards: {
         Row: {
+          ai_review_notes: string | null
           created_at: string
           description: string
+          difficulty_level: string | null
           id: string
           image_url: string | null
           set_id: string
@@ -54,8 +91,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_review_notes?: string | null
           created_at?: string
           description: string
+          difficulty_level?: string | null
           id?: string
           image_url?: string | null
           set_id: string
@@ -63,8 +102,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_review_notes?: string | null
           created_at?: string
           description?: string
+          difficulty_level?: string | null
           id?: string
           image_url?: string | null
           set_id?: string
@@ -147,6 +188,88 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_links: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          set_id: string
+          share_token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          set_id: string
+          share_token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          set_id?: string
+          share_token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_links_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_progress: {
+        Row: {
+          correct_count: number | null
+          created_at: string
+          difficulty_rating: string | null
+          flashcard_id: string
+          id: string
+          incorrect_count: number | null
+          last_studied: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          correct_count?: number | null
+          created_at?: string
+          difficulty_rating?: string | null
+          flashcard_id: string
+          id?: string
+          incorrect_count?: number | null
+          last_studied?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          correct_count?: number | null
+          created_at?: string
+          difficulty_rating?: string | null
+          flashcard_id?: string
+          id?: string
+          incorrect_count?: number | null
+          last_studied?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_progress_flashcard_id_fkey"
+            columns: ["flashcard_id"]
+            isOneToOne: false
+            referencedRelation: "flashcards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       study_sessions: {
         Row: {
           cards_studied: number | null
@@ -199,7 +322,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_share_token: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      user_has_access: {
+        Args: { set_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

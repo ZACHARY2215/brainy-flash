@@ -128,6 +128,8 @@ const Dashboard = () => {
       }));
 
       setSets(transformedSets);
+      
+      // Include user's public sets in the public section
       const transformedPublic = (publicData || []).map(set => ({
         id: set.id,
         title: set.title,
@@ -142,7 +144,15 @@ const Dashboard = () => {
         creator_name: 'Community Member',
         is_public: true
       }));
-      setPublicSets(transformedPublic);
+      
+      // Add user's own public sets to the public section
+      const userPublicSets = transformedSets.filter(set => set.is_public).map(set => ({
+        ...set,
+        creator_username: user?.user_metadata?.username || user?.email || 'You',
+        creator_name: user?.user_metadata?.full_name || user?.email || 'You'
+      }));
+      
+      setPublicSets([...userPublicSets, ...transformedPublic]);
 
       // Filter favorites
       const favoriteSets = transformedSets.filter(set => set.is_favorited);
