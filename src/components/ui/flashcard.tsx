@@ -64,7 +64,8 @@ const Flashcard = React.forwardRef<HTMLDivElement, FlashcardProps>(
 
     const handleClick = () => {
       setShouldAnimate(true);
-      setInternalFlipped(!internalFlipped);
+      const newFlippedState = !internalFlipped;
+      setInternalFlipped(newFlippedState);
       onFlip?.();
     };
 

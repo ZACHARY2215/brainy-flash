@@ -24,7 +24,9 @@ import {
   Copy,
   Eye,
   Check,
-  User
+  User,
+  FileText,
+  Loader2
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useToast } from "@/hooks/use-toast";
@@ -77,21 +79,23 @@ const Dashboard = () => {
         .from("sets")
         .select(`
           *,
-          flashcards(count),
-          study_sessions(count)
+          flashcards(count)
         `)
         .eq("user_id", user?.id)
-        .order("created_at", { ascending: false });
+        .order("updated_at", { ascending: false });
 
       if (setsError) throw setsError;
 
       const { data: publicData, error: publicError } = await supabase
         .from("sets")
-        .select(`*, flashcards(count)`)
+        .select(`
+          *,
+          flashcards(count)
+        `)
         .eq("is_public", true)
         .neq("user_id", user?.id)
         .order("created_at", { ascending: false })
-        .limit(24);
+        .limit(20);
 
       if (publicError) throw publicError;
 
@@ -112,8 +116,8 @@ const Dashboard = () => {
         title: set.title,
         description: set.description || "",
         tags: set.tags || [],
-        flashcard_count: set.flashcards?.[0]?.count || 0,
-        study_sessions_count: set.study_sessions?.[0]?.count || 0,
+        flashcard_count: 0,
+        study_sessions_count: 0,
         is_favorited: favoriteIds.has(set.id),
         created_at: set.created_at,
         updated_at: set.updated_at,
@@ -250,8 +254,23 @@ const Dashboard = () => {
     try {
       setSharingSetId(setId);
       
-      // For now, create a simple share URL since we're using Supabase
-      const shareUrl = `${window.location.origin}/shared/${setId}`;
+      // Call backend API to generate shareable link
+      const response = await fetch(`/api/sharing/${setId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expires_at: null // No expiration for now
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create share link');
+      }
+      
+      const data = await response.json();
+      const shareUrl = data.share_url;
       setShareUrl(shareUrl);
       
       // Copy to clipboard
@@ -265,6 +284,17 @@ const Dashboard = () => {
       
     } catch (error) {
       console.error('Error sharing set:', error);
+      // Fallback to simple URL if backend fails
+      const fallbackUrl = `${window.location.origin}/shared/${setId}`;
+      setShareUrl(fallbackUrl);
+      
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(fallbackUrl);
+        toast({
+          title: "Link copied!",
+          description: "The share link has been copied to your clipboard.",
+        });
+      }
     } finally {
       setSharingSetId(null);
     }
@@ -358,9 +388,10 @@ const Dashboard = () => {
           </Link>
         </div>
 
+
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Sets</CardTitle>
@@ -370,31 +401,33 @@ const Dashboard = () => {
                 <div className="text-2xl font-bold">{stats.total_sets}</div>
               </CardContent>
             </Card>
-
+            
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Flashcards</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Total Cards</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.total_flashcards}</div>
               </CardContent>
             </Card>
-
+            
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Study Sessions</CardTitle>
+                <CardTitle className="text-sm font-medium">Study Time</CardTitle>
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.total_sessions}</div>
+                <div className="text-2xl font-bold">
+                  {Math.floor(stats.total_time_minutes / 60)}h {stats.total_time_minutes % 60}m
+                </div>
               </CardContent>
             </Card>
-
+            
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Accuracy</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.accuracy_percentage}%</div>
@@ -489,15 +522,24 @@ const Dashboard = () => {
                             Edit
                           </Button>
                         </Link>
-                        <Button 
-                          size="sm" 
+                        <Button
                           variant="outline"
+                          size="sm"
                           onClick={() => shareSet(set.id)}
                           disabled={sharingSetId === set.id}
                         >
-                          <Share2 className="w-3 w-3 mr-1" />
-                          Share
-                        </Button>
+                        {sharingSetId === set.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Copy Link
+                          </>
+                        )}
+                      </Button>
                         <Button 
                           size="sm" 
                           variant="destructive"
@@ -716,14 +758,23 @@ const Dashboard = () => {
                             Study
                           </Button>
                         </Link>
-                        <Button 
-                          size="sm" 
+                        <Button
                           variant="outline"
+                          size="sm"
                           onClick={() => shareSet(set.id)}
                           disabled={sharingSetId === set.id}
                         >
-                          <Share2 className="w-3 w-3 mr-1" />
-                          Share
+                          {sharingSetId === set.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Share2 className="h-4 w-4 mr-2" />
+                              Copy Link
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>

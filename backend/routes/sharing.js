@@ -48,8 +48,7 @@ router.post('/:setId/share', authenticateUser, async (req, res) => {
 });
 
 // Get shared link details
-router.get('/:setId/share', authenticateUser, async (req, res) => {
-  try {
+router.get('/:setId/share', authenticateUser, async (req, res) => {  try {
     const { setId } = req.params;
     const db = getDB();
     
@@ -77,8 +76,7 @@ router.get('/:setId/share', authenticateUser, async (req, res) => {
 });
 
 // Revoke a shared link
-router.delete('/:setId/share/:linkId', authenticateUser, async (req, res) => {
-  try {
+router.delete('/:setId/share/:linkId', authenticateUser, async (req, res) => {  try {
     const { setId, linkId } = req.params;
     const db = getDB();
     
